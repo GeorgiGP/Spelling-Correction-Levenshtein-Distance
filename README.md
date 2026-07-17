@@ -108,83 +108,17 @@ where $H(P)$ is the cross-entropy rate of the model on test data.
 
 #### 3.1.1 editDistance
 
-Computes the modified Levenshtein distance matrix:
-
-```python
-def editDistance(s1: str, s2: str) -> np.ndarray:
-    M = np.zeros((len(s1)+1, len(s2)+1))
-
-    # Base cases
-    for i in range(1, len(s1)+1):
-        M[i, 0] = i
-    for j in range(1, len(s2)+1):
-        M[0, j] = j
-
-    # Fill matrix
-    for i in range(1, len(s1) + 1):
-        for j in range(1, len(s2) + 1):
-            M[i, j] = min(
-                M[i-1, j-1] + (s1[i-1] != s2[j-1]),  # substitution
-                M[i-1, j] + 1,                        # deletion
-                M[i, j-1] + 1                         # insertion
-            )
-            if i > 1:
-                M[i, j] = min(M[i, j], M[i-2, j-1] + 1)  # merge
-            if j > 1:
-                M[i, j] = min(M[i, j], M[i-1, j-2] + 1)  # split
-
-    return M
-```
+Computes the modified Levenshtein distance matrix. It initializes the base cases along the first row and column, then fills the matrix by taking the minimum cost among substitution/match, deletion, and insertion, additionally considering merge and split operations where the indices allow.
 
 **Complexity:** O(n × m) where n and m are string lengths
 
 #### 3.1.2 editWeight
 
-Computes weighted edit distance using learned operation costs:
-
-```python
-def editWeight(s1: str, s2: str, Weight: dict) -> float:
-    M = np.zeros((len(s1)+1, len(s2)+1))
-
-    for i in range(1, len(s1)+1):
-        M[i, 0] = M[i-1, 0] + Weight[(s1[i-1], '')]
-
-    for j in range(1, len(s2)+1):
-        M[0, j] = M[0, j-1] + Weight[('', s2[j-1])]
-
-    for i in range(1, len(s1) + 1):
-        for j in range(1, len(s2) + 1):
-            M[i, j] = min(
-                M[i-1, j-1] + Weight[(s1[i-1], s2[j-1])],
-                M[i-1, j] + Weight[(s1[i-1], '')],
-                M[i, j-1] + Weight[('', s2[j-1])]
-            )
-            # Merge and split operations...
-
-    return M[len(s1), len(s2)]
-```
+Computes weighted edit distance using learned operation costs. The base cases accumulate the deletion and insertion weights, and each cell selects the minimum-cost operation among substitution, deletion, insertion, merge, and split, using the learned `Weight` dictionary. It returns the total cost of transforming `s1` into `s2`.
 
 #### 3.1.3 bestAlignment
 
-Finds the optimal alignment by backtracking through the edit distance matrix:
-
-```python
-def bestAlignment(s1: str, s2: str) -> list[tuple[str, str]]:
-    M = editDistance(s1, s2)
-    alignment = []
-    i, j = len(s1), len(s2)
-
-    while i > 0 and j > 0:
-        if M[i-1, j] == M[i, j] - 1:
-            alignment.append((s1[i-1], ''))  # deletion
-            i -= 1
-        elif M[i, j-1] == M[i, j] - 1:
-            alignment.append(('', s2[j-1]))  # insertion
-            j -= 1
-        # ... other operations
-
-    return list(reversed(alignment))
-```
+Finds the optimal alignment by backtracking through the edit distance matrix, tracing each cell back to the operation (match, substitution, deletion, insertion, merge, or split) that produced its minimum cost.
 
 **Example:**
 ```
@@ -196,101 +130,23 @@ bestAlignment('редакция', 'рдашиа') =
 
 #### 3.2.1 trainWeights
 
-Learns edit operation weights from a corpus of (error, correction) pairs:
-
-```python
-def trainWeights(corpus: list[tuple[str, str]]) -> dict:
-    ids = subs = ins = dels = splits = merges = 0
-
-    for q, r in corpus:
-        alignment = bestAlignment(q, r)
-        for op in alignment:
-            # Count operation types...
-
-    N = ids + subs + ins + dels + splits + merges
-
-    weight = {}
-    for a in alphabet:
-        weight[(a, a)] = -math.log(ids / N)
-        weight[(a, '')] = -math.log(dels / N)
-        weight[('', a)] = -math.log(ins / N)
-        # ...
-
-    return weight
-```
+Learns edit operation weights from a corpus of (error, correction) pairs. For each pair, it computes the best alignment and counts how often each operation type occurs (matches/identities, substitutions, insertions, deletions, splits, merges). The counts are normalized and converted into weights via the negative log probability of each operation.
 
 ### 3.3 Candidate Generation
 
 #### 3.3.1 generateEdits
 
-Generates all strings at edit distance 1 from the input:
-
-```python
-def generateEdits(q: str) -> list[str]:
-    edits = []
-
-    for i in range(len(q) + 1):
-        for a in alphabet:
-            edits.append(q[:i] + a + q[i:])  # insertion
-
-    for i in range(len(q)):
-        edits.append(q[:i] + q[i+1:])  # deletion
-        for a in alphabet:
-            edits.append(q[:i] + a + q[i+1:])  # substitution
-            for b in alphabet:
-                edits.append(q[:i] + a + b + q[i+1:])  # split
-
-    for i in range(len(q) - 1):
-        for a in alphabet:
-            edits.append(q[:i] + a + q[i+2:])  # merge
-
-    return edits
-```
+Generates all strings at edit distance 1 from the input by applying insertions, deletions, substitutions, splits, and merges across every position of the query.
 
 #### 3.3.2 generateCandidates
 
-Generates all valid candidates within edit distance 2:
-
-```python
-def generateCandidates(query: str, dictionary: dict) -> list[str]:
-    L = []
-    if allWordsInDictionary(query):
-        L.append(query)
-
-    for query1 in generateEdits(query):
-        if allWordsInDictionary(query1):
-            L.append(query1)
-        for query2 in generateEdits(query1):
-            if allWordsInDictionary(query2):
-                L.append(query2)
-
-    return L
-```
+Generates all valid candidates within edit distance 2 by applying `generateEdits` once, and then again to each result, keeping only those strings whose words all appear in the dictionary.
 
 ### 3.4 Spelling Correction
 
 #### 3.4.1 correctSpelling
 
-Combines edit distance with language model:
-
-```python
-def correctSpelling(r: str, model: MarkovModel, weights: dict,
-                    mu: float = 1.0, alpha: float = 0.9):
-    result = ''
-    maxProbability = float('-inf')
-    candidates = generateCandidates(r, model.kgrams[tuple()])
-
-    for candidate in candidates:
-        curProbability = (
-            -editWeight(r, candidate, weights) +
-            mu * model.sentenceLogProbability(candidate.split(" "), alpha)
-        )
-        if curProbability > maxProbability:
-            result = candidate
-            maxProbability = curProbability
-
-    return result
-```
+Combines edit distance with the language model. It enumerates the candidates for the observed string, scores each one by combining the negative weighted edit distance with the language model log probability (weighted by `mu`), and returns the highest-scoring candidate.
 
 **Scoring Function:**
 $$\text{score}(c) = -w(r, c) + \mu \cdot \log P_{\text{LM}}(c)$$
@@ -393,89 +249,6 @@ HW1/
 │   ├── a1.py                # Implementation
 │   └── TI_HW1.pdf          # Theoretical proofs
 └── venv/                    # Virtual environment
-```
-
-### 7.3 Execution
-
-```bash
-# Create and activate virtual environment (first time only)
-cd HW1
-python3 -m venv venv
-source venv/bin/activate
-pip install numpy nltk
-
-# Navigate to working directory
-cd a1
-
-# Test edit distance
-python -c "
-import sys
-sys.path.insert(0, '../solution')
-import a1
-
-print('Edit distance (редакция -> рдашиа):', a1.editDistance('редакция', 'рдашиа')[-1, -1])
-print('Edit distance (заявката -> язвката):', a1.editDistance('заявката', 'язвката')[-1, -1])
-print('Edit distance (супермен -> спер мън):', a1.editDistance('супермен', 'спер мън')[-1, -1])
-"
-
-# Test alignment
-python -c "
-import sys
-sys.path.insert(0, '../solution')
-import a1
-
-alignment = a1.bestAlignment('редакция', 'рдашиа')
-print('Alignment (редакция -> рдашиа):')
-for a, b in alignment:
-    print(f'  {repr(a)} -> {repr(b)}')
-"
-
-# Test generateEdits
-python -c "
-import sys
-sys.path.insert(0, '../solution')
-import a1
-
-edits = set(a1.generateEdits('тест')) - set(['тест'])
-print('Number of unique edits for тест:', len(edits))
-print('Sample edits:', list(edits)[:10])
-"
-
-# Test editWeight (with learned operation costs)
-python -c "
-import sys
-sys.path.insert(0, '../solution')
-import langmodel
-import a1
-
-# Create weights: match=0, delete=3, insert=3, substitute=2.5, merge=2.7, split=2.8
-weights = {}
-for a in langmodel.alphabet:
-    weights[(a,a)] = 0.0
-    weights[(a,'')] = 3.0
-    weights[('',a)] = 3.0
-    for b in langmodel.alphabet:
-        if a != b: weights[(a,b)] = 2.5
-        for c in langmodel.alphabet:
-            if a != c and b != c:
-                weights[(a+b,c)] = 2.7
-                weights[(c,a+b)] = 2.8
-
-# Merge: 'нормално' -> 'юрмално' (но -> ю is a merge, cost 2.7)
-print('editWeight (нормално -> юрмално):', a1.editWeight('нормално', 'юрмално', weights))
-
-# Split: 'ще' -> 'ште' (щ -> шт is a split, cost 2.8)
-print('editWeight (ще -> ште):', a1.editWeight('ще', 'ште', weights))
-
-# Substitution: 'заявката' -> 'заявьата' (к -> ь, cost 2.5)
-print('editWeight (заявката -> заявьата):', a1.editWeight('заявката', 'заявьата', weights))
-
-# Insertion: 'заявката' -> 'заявкатаа' (extra а, cost 3.0)
-print('editWeight (заявката -> заявкатаа):', a1.editWeight('заявката', 'заявкатаа', weights))
-"
-
-# Run full test (requires corpus from http://dcl.bas.bg/BulNC-registration/)
-# python test.py
 ```
 
 ---
