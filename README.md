@@ -224,35 +224,6 @@ For strings "редакция" → "рдашиа":
 
 ---
 
-## 7. Technical Details
-
-### 7.1 Requirements
-
-```
-Python >= 3.5
-numpy
-```
-
-### 7.2 Project Structure
-
-```
-HW1/
-├── README.md                 # This document
-├── TI_HW1.pdf               # Assignment description
-├── a1/
-│   ├── a1.pdf               # Detailed instructions
-│   ├── README.txt           # Setup instructions
-│   ├── langmodel.py         # Markov language model
-│   ├── corpus/              # Training corpus
-│   └── ...
-├── solution/
-│   ├── a1.py                # Implementation
-│   └── TI_HW1.pdf          # Theoretical proofs
-└── venv/                    # Virtual environment
-```
-
----
-
 ## References
 
 1. Jurafsky, D., & Martin, J. H. (2024). *Speech and Language Processing*. Chapter 2: Minimum Edit Distance.
